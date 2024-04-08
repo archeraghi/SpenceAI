@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Therapy Copilot - Recording Control</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #5A5A5A;
+            background-color: #FFF8E8;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .logo {
+            width: 150px;
+            height: auto;
+            margin-bottom: 50px;
+        }
+        h1 {
+            color: #48A9A6; /* Color from the logo for branding */
+            margin-bottom: 20px;
+        }
+
+        button {
+            background-color: #48A9A6; /* Color from logo */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #3B8B89;
+        }
+
+        #outputBox {
+            border: 1px solid #DDD;
+            border-radius: 5px;
+            width: calc(100% - 40px);
+            max-width: 600px;
+            padding: 15px;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 200px;
+            resize: none;
+            overflow-y: auto;
+        }
+
+        #progress {
+            display: none; /* Hide progress by default */
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media (max-width: 768px) {
+            button {
+                width: 90%;
+                padding: 15px;
+            }
+            #outputBox {
+                width: 90%;
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Therapy Copilot</h1>
+    <img src="logo.png" alt="Therapy Copilot Logo" class="logo">
+    <button id="recordButton">Start Recording</button>
+    <div id="progress">
+        <img id="loadingGif" src="path_to_your_loading_gif.gif" alt="Processing...">
+    </div>
+    <textarea id="outputBox" readonly placeholder="Transcription will appear here after recording..."></textarea>
+
+
+
+    <script>
+        let isRecording = false;
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        document.getElementById('recordButton').addEventListener('click', function() {
+            const button = document.getElementById('recordButton');
+            const loadingGif = document.getElementById('loadingGif');
+            const outputBox = document.getElementById('outputBox');
+
+            if (!isRecording) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.ondataavailable = event => {
+                            if (event.data.size > 0) {
+                                recordedChunks.push(event.data);
+                            }
+                        };
+                        mediaRecorder.onstop = () => {
+                            const blob = new Blob(recordedChunks, { type: 'audio/wav' });
+                            recordedChunks = [];
+                            uploadRecording(blob);
+                            loadingGif.style.display = 'block'; // Show loading gif
+                            outputBox.value = ''; // Clear the textbox
+                        };
+                        mediaRecorder.start();
+                        button.textContent = 'Stop Recording';
+                    })
+                    .catch(error => {
+                        console.error('Error getting media:', error);
+                        outputBox.value = 'Error getting media.';
+                    });
+            } else {
+                mediaRecorder.stop();
+                button.textContent = 'Start Recording';
+            }
+            isRecording = !isRecording;
+        });
+
+        function uploadRecording(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'output.wav');
+
+            fetch('http://127.0.0.1:5000/record', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.transcription) {
+                    outputBox.value = data.transcription;
+                } else {
+                    outputBox.value = 'No transcription available';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                outputBox.value = 'Failed to send data to backend.';
+            })
+            .finally(() => {
+                document.getElementById('loadingGif').style.display = 'none'; // Hide loading gif
+            });
+        }
+    </script>
+</body>
+</html>
